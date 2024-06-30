@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
+	"github.com/TimEngleSF/hue-sms-reciever/internal/service"
 	"github.com/joho/godotenv"
 	goopenai "github.com/sashabaranov/go-openai"
 	"github.com/twilio/twilio-go"
@@ -16,15 +18,16 @@ import (
 const version = "1.0.0"
 
 type config struct {
-	port int
-	env  string
+	port            int
+	env             string
+	userPhoneNumber string
 }
 
 type application struct {
 	config config
 	logger *slog.Logger
 	twilio *twilio.RestClient
-	openai *goopenai.Client
+	openai *service.OpenaiService
 }
 
 func main() {
@@ -33,7 +36,9 @@ func main() {
 
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
+	flag.StringVar(&cfg.userPhoneNumber, "userPhoneNumber", "", "User phone number: '+19875551234'")
 	flag.BoolVar(&useEnvFile, "envFile", false, "Use .env file for environment variables")
+
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -45,6 +50,29 @@ func main() {
 		}
 	}
 
+	// If the userPhoneNumber flag is not set, check the environment
+	if cfg.userPhoneNumber == "" {
+		cfg.userPhoneNumber = os.Getenv("USER_PHONE_NUMBER")
+		// check if phone number is the correct format '+19875551234' using regex
+
+		re := regexp.MustCompile(`^\+[1-9]\d{10,14}$`)
+		if !re.MatchString(cfg.userPhoneNumber) {
+			logger.Error("User phone number is not in the correct format", "phone_number", cfg.userPhoneNumber)
+			os.Exit(1)
+		}
+
+		if cfg.userPhoneNumber == "" {
+			logger.Error("User phone number is not set")
+			os.Exit(1)
+		}
+	}
+
+	for _, envVar := range []string{"TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "OPENAI_API_KEY"} {
+		if os.Getenv(envVar) == "" {
+			logger.Error(fmt.Sprintf("Environment variable %s is not set", envVar))
+			os.Exit(1)
+		}
+	}
 	// Initialize the Twilio client
 	var twilioClient *twilio.RestClient
 	twilioUsername := os.Getenv("TWILIO_ACCOUNT_SID")
@@ -59,15 +87,16 @@ func main() {
 	// Initialize openai client
 	openaiKey := os.Getenv("OPENAI_API_KEY")
 	openaiClient := goopenai.NewClient(openaiKey)
+	openaiService := service.OpenaiService{Client: openaiClient}
 
+	// Application struct
 	app := &application{
 		config: cfg,
 		logger: logger,
 		twilio: twilioClient,
-		openai: openaiClient,
+		openai: &openaiService,
 	}
 
-	fmt.Println(app)
 	svr := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.port),
 		Handler:      app.routes(),
