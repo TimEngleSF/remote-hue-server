@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/TimEngleSF/hue-sms-reciever/internal/service"
+	"github.com/TimEngleSF/remote-hue-server/internal/service"
 	"github.com/joho/godotenv"
 	goopenai "github.com/sashabaranov/go-openai"
 	"github.com/twilio/twilio-go"

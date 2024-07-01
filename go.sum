@@ -25,8 +25,6 @@ github.com/sashabaranov/go-openai v1.26.1/go.mod h1:lj5b/K+zjTSFxVLijLSTDZuP7adO
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.7.0 h1:nwc3DEeHmmLAfoZucVR881uASk0Mfjw8xYJ99tb5CcY=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
-github.com/twilio/twilio-go v1.20.0 h1:rrLIbudzKbLcDetfL5frv6Pzogju2l1lMHqVSW6cA8Y=
-github.com/twilio/twilio-go v1.20.0/go.mod h1:tdnfQ5TjbewoAu4lf9bMsGvfuJ/QU9gYuv9yx3TSIXU=
 github.com/twilio/twilio-go v1.22.1 h1:FKspjzm9pwmYC2FiFThsSDiGrcWth+rpsArqW87YTbA=
 github.com/twilio/twilio-go v1.22.1/go.mod h1:zRkMjudW7v7MqQ3cWNZmSoZJ7EBjPZ4OpNh2zm7Q6ko=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
