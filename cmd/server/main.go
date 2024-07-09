@@ -21,6 +21,7 @@ type config struct {
 	port            int
 	env             string
 	userPhoneNumber string
+	auth_token      *string
 }
 
 type application struct {
@@ -37,6 +38,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.userPhoneNumber, "userPhoneNumber", "", "User phone number: '+19875551234'")
+	flag.StringVar(cfg.auth_token, "auth_token", "password", "Authentication token for home client")
 	flag.BoolVar(&useEnvFile, "envFile", false, "Use .env file for environment variables")
 
 	flag.Parse()
