@@ -10,6 +10,8 @@ require (
 )
 
 require (
+	github.com/amimof/huego v1.2.1 // indirect
 	github.com/golang/mock v1.6.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 )
