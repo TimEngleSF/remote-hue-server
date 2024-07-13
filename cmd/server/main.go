@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/TimEngleSF/remote-hue-server/internal/service"
+	"github.com/amimof/huego"
+	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	goopenai "github.com/sashabaranov/go-openai"
 	"github.com/twilio/twilio-go"
@@ -21,14 +23,16 @@ type config struct {
 	port            int
 	env             string
 	userPhoneNumber string
-	auth_token      *string
+	auth_token      string
 }
 
 type application struct {
-	config config
-	logger *slog.Logger
-	twilio *twilio.RestClient
-	openai *service.OpenaiService
+	config       config
+	logger       *slog.Logger
+	twilio       *twilio.RestClient
+	openai       *service.OpenaiService
+	wsConnection *websocket.Conn
+	groupsState  *[]huego.Group
 }
 
 func main() {
@@ -38,7 +42,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.userPhoneNumber, "userPhoneNumber", "", "User phone number: '+19875551234'")
-	flag.StringVar(cfg.auth_token, "auth_token", "password", "Authentication token for home client")
+	flag.StringVar(&cfg.auth_token, "auth_token", "password", "Authentication token for home client")
 	flag.BoolVar(&useEnvFile, "envFile", false, "Use .env file for environment variables")
 
 	flag.Parse()
