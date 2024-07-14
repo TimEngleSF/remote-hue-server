@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/amimof/huego"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -11,7 +14,37 @@ type OpenaiService struct {
 	SystemRoleMessage *string
 }
 
-func (s *OpenaiService) TranformTextBodyToJSON(text string) (string, error) {
+func SystemRoleMessage(groups []huego.Group, groupNames GroupNames) string {
+	message := fmt.Sprintf(`
+Given the following action options seperated by new lines you are to convert natural langauge text about Hue light groups into JSON.
+'''
+status
+'''
+
+Requests should refer to one of the following groups or all groups:
+'''
+%v
+'''
+
+Here is an example of a status request and the expected JSON you should respond with:
+    request: 
+    "What is the status of %v?"
+    response:
+    {"type": "status", "data": {"room": ["%v"]}}
+
+    request:
+    "What is the status of all groups?"
+    response:
+    {"type": "status", "data": {"room": %v}}
+
+
+    Your response should just be the json string not wrapped in any other text.
+
+`, groupNames.String(), strings.ToLower(groupNames[0]), groupNames[0], groupNames.ArrayString())
+	return message
+}
+
+func (s *OpenaiService) TranformTextBodyToJSON(systemRoleMessage, userMessage string) (string, error) {
 	resp, err := s.Client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
@@ -19,11 +52,11 @@ func (s *OpenaiService) TranformTextBodyToJSON(text string) (string, error) {
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
-					Content: "You are a helpful assistant.",
+					Content: systemRoleMessage,
 				},
 				{
 					Role:    openai.ChatMessageRoleUser,
-					Content: text,
+					Content: userMessage,
 				},
 			},
 		})
