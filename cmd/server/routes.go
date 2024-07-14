@@ -9,9 +9,10 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 
+	router.HandlerFunc(http.MethodGet, "/ws", app.handleWSConnections)
+
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
 	router.HandlerFunc(http.MethodPost, "/text", app.twilioWebHookHandler)
-	router.HandlerFunc(http.MethodGet, "/ws", app.handleWSConnections)
 
 	// Return the httprouter instance.
 	return router
