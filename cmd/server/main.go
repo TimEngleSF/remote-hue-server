@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/TimEngleSF/remote-hue-server/internal/service"
-	"github.com/amimof/huego"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	goopenai "github.com/sashabaranov/go-openai"
@@ -20,10 +20,11 @@ import (
 const version = "1.0.0"
 
 type config struct {
-	port            int
-	env             string
-	userPhoneNumber string
-	auth_token      string
+	port              int
+	env               string
+	userPhoneNumber   string
+	auth_token        string
+	twilioPhoneNumber string
 }
 
 type application struct {
@@ -32,7 +33,10 @@ type application struct {
 	twilio       *twilio.RestClient
 	openai       *service.OpenaiService
 	wsConnection *websocket.Conn
-	groupsState  *[]huego.Group
+	groupsState  *service.Groups
+	groupNames   service.GroupNames
+	responseMap  map[string]chan JSONMessage
+	responseMu   sync.Mutex
 }
 
 func main() {
@@ -42,6 +46,7 @@ func main() {
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.userPhoneNumber, "userPhoneNumber", "", "User phone number: '+19875551234'")
+	flag.StringVar(&cfg.twilioPhoneNumber, "twilioPhoneNumber", "", "Twilio phone number: '+19875551234'")
 	flag.StringVar(&cfg.auth_token, "auth_token", "password", "Authentication token for home client")
 	flag.BoolVar(&useEnvFile, "envFile", false, "Use .env file for environment variables")
 
@@ -69,6 +74,21 @@ func main() {
 
 		if cfg.userPhoneNumber == "" {
 			logger.Error("User phone number is not set")
+			os.Exit(1)
+		}
+	}
+
+	// If the twilioPhoneNumber flag is not set, check the environment
+	if cfg.twilioPhoneNumber == "" {
+		cfg.twilioPhoneNumber = os.Getenv("TWILIO_PHONE_NUMBER")
+		// check if phone number is the correct format '+19875551234' using regex
+		re := regexp.MustCompile(`^\+[1-9]\d{10,14}$`)
+		if !re.MatchString(cfg.twilioPhoneNumber) {
+			logger.Error("Twilio phone number is not in the correct format", "phone_number", cfg.twilioPhoneNumber)
+			os.Exit(1)
+		}
+		if cfg.twilioPhoneNumber == "" {
+			logger.Error("Twilio phone number is not set")
 			os.Exit(1)
 		}
 	}
