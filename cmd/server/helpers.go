@@ -26,3 +26,19 @@ func (app *application) writeJSON(w http.ResponseWriter, status int, data envelo
 
 	return nil
 }
+
+// JSONMessage represents the structure of the incoming WebSocket messages.
+type JSONMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+func (m *JSONMessage) UnmarshalJSON(data []byte) error {
+	type Alias JSONMessage
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+	return json.Unmarshal(data, &aux)
+}
