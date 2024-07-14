@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
-	"github.com/amimof/huego"
+	"github.com/TimEngleSF/remote-hue-server/internal/service"
 	"github.com/gorilla/websocket"
 )
 
+// WebSocket upgrader with custom settings
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -17,12 +21,21 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// GroupsStateMessage represents the structure of the group state messages.
 type GroupsStateMessage struct {
-	Type string        `json:"type"`
-	Data []huego.Group `json:"data"`
+	Type string `json:"type"`
+	Data struct {
+		Groups service.Groups `json:"groups"`
+	} `json:"data"`
 }
 
+func (gs *GroupsStateMessage) Unmarshal(data []byte) error {
+	return json.Unmarshal(data, gs)
+}
+
+// handleWSConnections handles WebSocket connections and processes incoming messages.
 func (app *application) handleWSConnections(w http.ResponseWriter, r *http.Request) {
+	// Upgrade the HTTP connection to a WebSocket connection.
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		app.logger.Error(err.Error())
@@ -30,62 +43,110 @@ func (app *application) handleWSConnections(w http.ResponseWriter, r *http.Reque
 	}
 	defer conn.Close()
 
+	// Set the WebSocket connection for the application.
+	app.wsConnection = conn
 	log.Println("Client connected:", r.RemoteAddr)
-	if err := conn.WriteMessage(websocket.TextMessage, []byte("Connected to server")); err != nil {
-		app.logger.Error(err.Error())
-		return
-	}
 
+	// Loop to read and process incoming messages from the client.
 	for {
-		var msg GroupsStateMessage
+		fmt.Println("Waiting for message from client")
+		var msg JSONMessage
+		// Read a JSON message from the client.
 		err := conn.ReadJSON(&msg)
 		if err != nil {
 			log.Println("Error reading message from client:", err)
 			break
 		}
 
-		app.groupsState = &msg.Data
-		log.Printf("Received message: %+v\n", msg)
-
-		// Echo the message back to the client
-		if err := conn.WriteJSON(msg); err != nil {
-			log.Println("Error writing message to client:", err)
-			break
-		}
+		// Dispatch the message based on its type.
+		app.dispatchMessage(msg)
 	}
 	log.Println("Client disconnected")
 }
 
-// func (app *application) handleWSConnections(w http.ResponseWriter, r *http.Request) {
-// 	conn, err := upgrader.Upgrade(w, r, nil)
-// 	if err != nil {
-// 		app.logger.Error("Error upgrading websocket connection:", err)
-// 		return
-// 	}
-// 	defer conn.Close()
-//
-// 	app.wsConnection = conn
-// 	app.logger.Info("Client connected", "ip", r.RemoteAddr)
-// 	if err := conn.WriteMessage(websocket.TextMessage, []byte("Connected to server")); err != nil {
-// 		app.logger.Error("Error writing initial message to client:", err)
-// 		return
-// 	}
-//
-// 	for {
-// 		// read message from client
-// 		var msg Message
-// 		err := conn.ReadJSON(&msg)
-// 		if err != nil {
-// 			app.logger.Error("Error reading message from client:", err)
-// 			break
-// 		}
-// 		fmt.Println(msg)
-//
-// 		// Example: Echo the message back to the client
-// 		if err := conn.WriteJSON(msg); err != nil {
-// 			app.logger.Error("Error writing message to client:", err)
-// 			break
-// 		}
-// 	}
-// 	app.logger.Info("Client disconnected")
-// }
+// dispatchMessage routes the message to the appropriate handler or channel.
+func (app *application) dispatchMessage(msg JSONMessage) {
+	app.responseMu.Lock()
+	defer app.responseMu.Unlock()
+
+	if ch, exists := app.responseMap[msg.Type]; exists {
+		ch <- msg
+	} else {
+		switch msg.Type {
+		case "group_state":
+			err := app.GroupStateMessageHandler(msg)
+			if err != nil {
+				app.logger.Error("Error handling group state message:", "error", err)
+			}
+		default:
+			app.logger.Warn("unknown message type:", "type", msg.Type)
+		}
+	}
+}
+
+// GroupStateMessageHandler processes group state messages and updates the application state.
+func (app *application) GroupStateMessageHandler(msg JSONMessage) error {
+	// Convert the generic Data field to JSON.
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	var msgData GroupsStateMessage
+	err = msgData.Unmarshal(data)
+	if err != nil {
+		return err
+	}
+
+	groups := service.Groups(msgData.Data.Groups)
+	// Update the application state with the new groups data.
+	app.groupsState = &groups
+	app.groupNames = []string{}
+	for _, group := range groups {
+		app.groupNames = append(app.groupNames, group.Name)
+	}
+	return nil
+}
+
+func (app *application) SetGroupsStateField() error {
+	msg := JSONMessage{
+		Type: "status",
+		Data: nil,
+	}
+
+	responseChan := make(chan JSONMessage)
+
+	app.responseMu.Lock()
+	app.responseMap["group_state"] = responseChan
+	app.responseMu.Unlock()
+
+	err := app.wsConnection.WriteJSON(msg)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case response := <-responseChan:
+		// Handle the response
+		var groupsMessage GroupsStateMessage
+		data, err := json.Marshal(response)
+		if err != nil {
+			return err
+		}
+
+		err = groupsMessage.Unmarshal(data)
+		if err != nil {
+			return err
+		}
+
+		app.groupsState = &groupsMessage.Data.Groups
+
+	case <-time.After(5 * time.Second):
+		// Timeout after 5 seconds
+		return fmt.Errorf("timeout waiting for group_state response")
+	}
+	app.responseMu.Lock()
+	delete(app.responseMap, "group_state")
+	app.responseMu.Unlock()
+	return nil
+}
