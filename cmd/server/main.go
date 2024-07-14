@@ -117,10 +117,11 @@ func main() {
 
 	// Application struct
 	app := &application{
-		config: cfg,
-		logger: logger,
-		twilio: twilioClient,
-		openai: &openaiService,
+		config:      cfg,
+		logger:      logger,
+		twilio:      twilioClient,
+		openai:      &openaiService,
+		responseMap: make(map[string]chan JSONMessage),
 	}
 
 	svr := &http.Server{
