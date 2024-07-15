@@ -57,8 +57,8 @@ func (gs *Groups) GroupStatusMessage(names GroupNames) string {
 
 func (g Group) String() string {
 	return fmt.Sprintf(
-		`{"name": %s, "lights": %+v,"isOn": %v, "brightness": %d}`,
-		g.Name, g.Lights, g.State.On, g.State.Bri,
+		`{"group": %s, "isOn": %v, "brightness": %d}`,
+		g.Name, g.State.On, g.State.Bri,
 	)
 }
 
