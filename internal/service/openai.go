@@ -33,8 +33,10 @@ Here is information on each of the groups that you may use to help create meanin
 
 %v
 
+%v
+
 Your response should just be the JSON string not wrapped in any other text.
-`, groupNames.String(), fmt.Sprintf("%+v\n", groups), statusExamples(groupNames))
+`, groupNames.String(), fmt.Sprintf("%+v\n", groups), statusExamples(groupNames), updateExamples(groupNames, groups))
 	return message
 }
 
@@ -57,16 +59,19 @@ Here is an example of a status request and the expected JSON you should respond 
 func updateExamples(groupNames GroupNames, groups Groups) string {
 	example := fmt.Sprintf(`
 Here is an example of an update request to turn groups on or off and the expected JSON you should respond with:
+  NOTES: 
+  - brightness is optional and should be set to 254 if not provided.
+  - if "isOn" is false do not include brightness
     request:
     "Please turn %v on."
     response:
-    {"type": "update", "data": {"isGroup": true, "group": "%v", "isOn": true, "brightness": 254}}
+    {"type": "update", "data": {"group": "%v", "isOn": true, "brightness": 254}}
 
     request:
     "Please turn %v off."
     response:
-    {"type": "update", "data": {"isGroup": true, "group": "%v", "isOn": false}}
-    `, strings.ToLower(groups[0].Name), groups[0].ID, strings.ToLower(groups[0].Name), groups[0].ID)
+    {"type": "update", "data": {"group": "%v", "isOn": false}}
+    `, strings.ToLower(groups[0].Name), groups[0].Name, strings.ToLower(groups[0].Name), groups[0].Name)
 	return example
 }
 
