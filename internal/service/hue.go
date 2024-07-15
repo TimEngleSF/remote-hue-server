@@ -28,7 +28,10 @@ func (gn GroupNames) ArrayString() string {
 	return formattedString
 }
 
-type Groups []huego.Group
+type Group struct {
+	huego.Group
+}
+type Groups []Group
 
 func (gs *Groups) GroupStatusMessage(names GroupNames) string {
 	msg := ""
@@ -50,4 +53,19 @@ func (gs *Groups) GroupStatusMessage(names GroupNames) string {
 		}
 	}
 	return msg
+}
+
+func (g Group) String() string {
+	return fmt.Sprintf(
+		`{"group": %s, "isOn": %v, "brightness": %d}`,
+		g.Name, g.State.On, g.State.Bri,
+	)
+}
+
+func (gs Groups) String() string {
+	var sb strings.Builder
+	for _, g := range gs {
+		sb.WriteString(fmt.Sprintf("%v\n", g))
+	}
+	return sb.String()
 }

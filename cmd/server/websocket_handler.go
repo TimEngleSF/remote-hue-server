@@ -143,7 +143,9 @@ func (app *application) SetGroupsStateField() error {
 
 	case <-time.After(5 * time.Second):
 		// Timeout after 5 seconds
+		app.logger.Error("timeout waiting for group_state response")
 		return fmt.Errorf("timeout waiting for group_state response")
+
 	}
 	app.responseMu.Lock()
 	delete(app.responseMap, "group_state")

@@ -2,7 +2,7 @@ package main
 
 import "net/http"
 
-func (app *application) logErrror(r *http.Request, err error) {
+func (app *application) logError(r *http.Request, err error) {
 	var (
 		method = r.Method
 		uri    = r.URL.RequestURI()
