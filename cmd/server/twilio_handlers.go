@@ -18,6 +18,12 @@ type GPTStatusRequest struct {
 	} `json:"data"`
 }
 
+type GPTUpdateRequest struct {
+	Group      string `json:"group"`
+	IsOn       bool   `json:"isOn"`
+	Brightness *int   `json:"brightness,omitempty"` // HOW TO OMIT IF NOT SET
+}
+
 // twilioWebHookHandler handles incoming requests from Twilio's webhook.
 func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Receive Text Handler")
@@ -56,7 +62,6 @@ func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Unmarshal the response from OpenAI into JSONMessage
-	//  err = json.Unmarshal([]byte(gptResponse), &jsonMessage)
 	err = jsonMessage.UnmarshalJSON([]byte(gptResponse))
 	if err != nil {
 		app.logError(r, err)
@@ -69,6 +74,8 @@ func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Requ
 		app.handleStatusRequest(jsonMessage)
 	case "update":
 		fmt.Println("Update!")
+		fmt.Printf("%+v", jsonMessage)
+		app.handleUpdateRequest(jsonMessage)
 	default:
 		app.logger.Error("received a text message with an unknown type", "type", jsonMessage.Type)
 	}
@@ -109,6 +116,69 @@ func (app *application) handleStatusRequest(jsonMsg JSONMessage) {
 	params.SetBody(app.groupsState.GroupStatusMessage(service.GroupNames(statusRequest.Data.Rooms)))
 
 	_, err = app.twilio.Api.CreateMessage(params)
+	if err != nil {
+		app.logger.Error("error sending Twilio message", "error", err)
+	}
+}
+
+func (app *application) handleUpdateRequest(jsonMsg JSONMessage) {
+	var updateRequest GPTUpdateRequest
+	data, err := json.Marshal(jsonMsg.Data)
+	if err != nil {
+		app.logger.Error("error marshalling json message")
+		return
+	}
+
+	fmt.Println("DATA!!!!", string(data))
+
+	err = json.Unmarshal(data, &updateRequest)
+	if err != nil {
+		app.logger.Error("error unmarshalling json message")
+		return
+	}
+
+	fmt.Printf("updateRequest\n%+v\n", updateRequest)
+	if updateRequest.Brightness != nil {
+		fmt.Printf("Brightness is set to: %d\n", *updateRequest.Brightness)
+	} else {
+		fmt.Println("Brightness is not set")
+	}
+
+	clientUpdate := struct {
+		Group      string `json:"group"`
+		IsOn       bool   `json:"isOn"`
+		Brightness int    `json:"brightness,omitempty"`
+	}{
+		Group: updateRequest.Group,
+		IsOn:  updateRequest.IsOn,
+	}
+
+	if updateRequest.Brightness != nil {
+		clientUpdate.Brightness = *updateRequest.Brightness
+	}
+
+	// Marshalling and sending the response
+	clientUpdateData, err := json.Marshal(clientUpdate)
+	if err != nil {
+		app.logger.Error("error marshalling client update message", "error", err)
+		return
+	}
+
+	fmt.Println("Client update JSON:", string(clientUpdateData))
+
+	// TODO: Send update message to client
+	// err = app.wsConn.WriteMessage(websocket.TextMessage, clientUpdateData)
+	if err != nil {
+		app.logger.Error("error sending client update message", "error", err)
+	}
+}
+
+func (app *application) sendErrorTextMessage(msg string) {
+	params := &twilioApi.CreateMessageParams{}
+	params.SetTo(app.config.userPhoneNumber)
+	params.SetFrom(app.config.twilioPhoneNumber)
+	params.SetBody(msg)
+	_, err := app.twilio.Api.CreateMessage(params)
 	if err != nil {
 		app.logger.Error("error sending Twilio message", "error", err)
 	}
