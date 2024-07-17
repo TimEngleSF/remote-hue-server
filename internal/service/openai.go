@@ -36,7 +36,7 @@ Here is information on each of the groups that you may use to help create meanin
 %v
 
 Your response should just be the JSON string not wrapped in any other text.
-`, groupNames.String(), fmt.Sprintf("%+v\n", groups), statusExamples(groupNames), updateExamples(groupNames, groups))
+`, groupNames.String(), fmt.Sprintf("%+v\n", groups), statusExamples(groupNames), updateExamples(groups))
 	return message
 }
 
@@ -56,12 +56,13 @@ Here is an example of a status request and the expected JSON you should respond 
 	return example
 }
 
-func updateExamples(groupNames GroupNames, groups Groups) string {
+func updateExamples(groups Groups) string {
 	example := fmt.Sprintf(`
 Here is an example of an update request to turn groups on or off and the expected JSON you should respond with:
   NOTES: 
   - brightness is optional and should be set to 254 if not provided.
   - if "isOn" is false do not include brightness
+  - if asked to turn up or down brightness do so on increments of 25% with 0 being off and 254 being full brightness.
     request:
     "Please turn %v on."
     response:
@@ -71,6 +72,12 @@ Here is an example of an update request to turn groups on or off and the expecte
     "Please turn %v off."
     response:
     {"type": "update", "data": {"group": "%v", "isOn": false}}
+    
+    request:
+    -Note: act as if current brightness is 254
+    "Please turn down brightness of kitchen"
+    "{"type": "update", "data": {"group": "kitchen", "isOn": true, "brightness": 191}}"
+    
     `, strings.ToLower(groups[0].Name), groups[0].Name, strings.ToLower(groups[0].Name), groups[0].Name)
 	return example
 }
@@ -95,7 +102,14 @@ func (s *OpenaiService) TranformTextBodyToJSON(systemRoleMessage, userMessage st
 		return "", err
 	}
 
-	completion := resp.Choices[0].Message.Content
+	completion := CleanGPTResponse(resp.Choices[0].Message.Content)
 
 	return completion, nil
+}
+
+// Remove the triple backticks and the "json" keyword if they exist
+func CleanGPTResponse(gptResponse string) string {
+	cleaned := strings.ReplaceAll(gptResponse, "```json", "")
+	cleaned = strings.ReplaceAll(cleaned, "```", "")
+	return strings.TrimSpace(cleaned)
 }
