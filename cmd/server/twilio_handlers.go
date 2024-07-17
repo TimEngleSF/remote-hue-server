@@ -24,6 +24,19 @@ type GPTUpdateRequest struct {
 	Brightness *int   `json:"brightness,omitempty"` // HOW TO OMIT IF NOT SET
 }
 
+// ClientUpdateData represents the data to be sent to the client.
+type ClientUpdateData struct {
+	Group      string `json:"group"`
+	IsOn       bool   `json:"isOn"`
+	Brightness *int   `json:"brightness,omitempty"`
+}
+
+// ClientUpdateMessage represents the update message to be sent to the client.
+type ClientUpdateMessage struct {
+	Type string           `json:"type"`
+	Data ClientUpdateData `json:"data"`
+}
+
 // twilioWebHookHandler handles incoming requests from Twilio's webhook.
 func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Receive Text Handler")
@@ -57,13 +70,14 @@ func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Requ
 	// Call the OpenAI API
 	gptResponse, err := app.openai.TranformTextBodyToJSON(systemRoleMessage, bodyText)
 	if err != nil {
+		app.sendErrorTextMessage("There was an error communicating with openai. \n Please try again.")
 		app.logError(r, err)
 		return
 	}
 
-	// Unmarshal the response from OpenAI into JSONMessage
 	err = jsonMessage.UnmarshalJSON([]byte(gptResponse))
 	if err != nil {
+		app.sendErrorTextMessage("There was an error parsing json")
 		app.logError(r, err)
 		return
 	}
@@ -84,12 +98,13 @@ func (app *application) twilioWebHookHandler(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleStatusRequest processes the status request from the JSON message.
+// Processes the status request from the JSON message.
 func (app *application) handleStatusRequest(jsonMsg JSONMessage) {
 	// Update group state field
 	err := app.SetGroupsStateField()
 	if err != nil {
 		app.logger.Error("error getting groups state", "error", err)
+		app.sendErrorTextMessage("There was an error getting the groups state. \n Please try again.")
 		return
 	}
 
@@ -98,16 +113,16 @@ func (app *application) handleStatusRequest(jsonMsg JSONMessage) {
 	data, err := json.Marshal(jsonMsg.Data)
 	if err != nil {
 		app.logger.Error("error marshalling json message")
+		app.sendErrorTextMessage("There was an error processing your request. \n Please try again.")
 		return
 	}
 
 	err = json.Unmarshal(data, &statusRequest.Data)
 	if err != nil {
 		app.logger.Error("error unmarshalling json message")
+		app.sendErrorTextMessage("There was an error processing your request. \n Please try again.")
 		return
 	}
-
-	fmt.Println("DATA!!!!", string(data))
 
 	// Prepare and send the Twilio message
 	params := &twilioApi.CreateMessageParams{}
@@ -121,53 +136,47 @@ func (app *application) handleStatusRequest(jsonMsg JSONMessage) {
 	}
 }
 
+// Handles request that update the state of groups.
 func (app *application) handleUpdateRequest(jsonMsg JSONMessage) {
 	var updateRequest GPTUpdateRequest
+	// Marshal JSONMessage Data to JSON
 	data, err := json.Marshal(jsonMsg.Data)
 	if err != nil {
 		app.logger.Error("error marshalling json message")
 		return
 	}
 
-	fmt.Println("DATA!!!!", string(data))
-
+	// Unmarshal JSON Data into GPTUpdateRequest
 	err = json.Unmarshal(data, &updateRequest)
 	if err != nil {
-		app.logger.Error("error unmarshalling json message")
+		app.logger.Error("error unmarshalling JSON to GPTUpdateRequest", "error", err)
 		return
 	}
 
-	fmt.Printf("updateRequest\n%+v\n", updateRequest)
 	if updateRequest.Brightness != nil {
 		fmt.Printf("Brightness is set to: %d\n", *updateRequest.Brightness)
 	} else {
 		fmt.Println("Brightness is not set")
 	}
 
-	clientUpdate := struct {
-		Group      string `json:"group"`
-		IsOn       bool   `json:"isOn"`
-		Brightness int    `json:"brightness,omitempty"`
-	}{
-		Group: updateRequest.Group,
-		IsOn:  updateRequest.IsOn,
-	}
-
+	// Log the received update request for debugging
+	fmt.Printf("Received Update Request: %+v\n", updateRequest)
 	if updateRequest.Brightness != nil {
-		clientUpdate.Brightness = *updateRequest.Brightness
+		fmt.Printf("Brightness is set to: %d\n", *updateRequest.Brightness)
+	} else {
+		fmt.Println("Brightness is not set")
 	}
 
-	// Marshalling and sending the response
-	clientUpdateData, err := json.Marshal(clientUpdate)
-	if err != nil {
-		app.logger.Error("error marshalling client update message", "error", err)
-		return
+	clientUpdateData := ClientUpdateData(updateRequest)
+
+	// Prepare Client Update Message
+	clientUpdateMessage := ClientUpdateMessage{
+		Type: "update",
+		Data: clientUpdateData,
 	}
 
-	fmt.Println("Client update JSON:", string(clientUpdateData))
-
-	// TODO: Send update message to client
-	// err = app.wsConn.WriteMessage(websocket.TextMessage, clientUpdateData)
+	// Send Update Message to Client via WebSocket
+	err = app.wsConnection.WriteJSON(clientUpdateMessage)
 	if err != nil {
 		app.logger.Error("error sending client update message", "error", err)
 	}
